@@ -1,0 +1,75 @@
+import unittest
+import psycopg2
+import sys
+import os
+import uuid
+
+# Resolve namespace path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from booking_transaction import execute_booking
+
+class TestBookingWhiteBoxCFG(unittest.TestCase):
+    """
+    Formal White Box Testing utilizing Control Flow Graph (CFG) paths.
+    Cyclomatic Complexity V(G) = 5.
+    """
+
+    def setUp(self):
+        self.conn = psycopg2.connect(
+            dbname="event_booking", 
+            user="postgres", 
+            password="limo91we",
+            host="localhost",
+            port="5432"
+        )
+        
+        # Inject isolated state vectors for specific path testing
+        with self.conn.cursor() as cursor:
+            # Standard Event
+            self.valid_event_id = str(uuid.uuid4())
+            cursor.execute(
+                "INSERT INTO events (event_id, title, total_capacity, available_capacity) VALUES (%s, %s, %s, %s)",
+                (self.valid_event_id, 'Path 1 Test Event', 50, 50)
+            )
+            
+            # Low Capacity Event (for Path 3)
+            self.low_cap_event_id = str(uuid.uuid4())
+            cursor.execute(
+                "INSERT INTO events (event_id, title, total_capacity, available_capacity) VALUES (%s, %s, %s, %s)",
+                (self.low_cap_event_id, 'Path 3 Test Event', 5, 2) # Only 2 tickets available
+            )
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.rollback()
+        self.conn.close()
+
+    def test_path_1_nominal_execution(self):
+        """CFG Path 1: Valid constraints. Expected: CONFIRMED."""
+        result = execute_booking(self.valid_event_id, 2, self.conn)
+        self.assertEqual(result['status'], 'CONFIRMED')
+
+    def test_path_2_entity_fault(self):
+        """CFG Path 2: Invalid UUID. Expected: ValueError ('does not exist')."""
+        fake_id = str(uuid.uuid4())
+        with self.assertRaisesRegex(ValueError, "does not exist"):
+            execute_booking(fake_id, 2, self.conn)
+
+    def test_path_3_capacity_fault(self):
+        """CFG Path 3: Requested > Available. Expected: ValueError ('exceeds limit')."""
+        with self.assertRaisesRegex(ValueError, "exceeds limit"):
+            execute_booking(self.low_cap_event_id, 5, self.conn) # Requesting 5, only 2 available
+
+    def test_path_4_integrity_fault(self):
+        """CFG Path 4: Database CHECK constraint violation. Expected: ValueError ('outside the')."""
+        with self.assertRaisesRegex(ValueError, "outside the"):
+            execute_booking(self.valid_event_id, 15, self.conn) # x = 15 violates partition
+
+    def test_path_5_system_fault(self):
+        """CFG Path 5: Base Exception routing. Expected: Propagation of Exception."""
+        # Inject an invalid connection object to force an AttributeError/Exception in the try block
+        with self.assertRaises(Exception):
+            execute_booking(self.valid_event_id, 2, conn=None)
+
+if __name__ == '__main__':
+    unittest.main()
