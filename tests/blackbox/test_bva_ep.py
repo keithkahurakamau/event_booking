@@ -18,7 +18,7 @@ class TestBookingBoundaryValues(unittest.TestCase):
         self.conn = psycopg2.connect(
             dbname="event_booking", 
             user="postgres", 
-            password="limo91we",
+            password="",
             host="localhost",
             port="5432"
         )

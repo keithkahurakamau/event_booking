@@ -1,1 +1,1 @@
-# Placeholder for Dependency Manifest
+psycopg2-binary==2.9.11

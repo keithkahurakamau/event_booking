@@ -7,7 +7,7 @@ def get_connection():
     return psycopg2.connect(
         dbname="event_booking",      # Replace with your target database
         user="postgres",        # Replace with your role
-        password="limo91we",    # Replace with your credentials
+        password="",    # Replace with your credentials
         host="localhost",
         port="5432"
     )
