@@ -1,30 +1,53 @@
 // ==============================================================================
 // FILE: src/forms/BookingForm.js
-// PURPOSE: Customer Transaction Interface
-// SQA FOCUS: Multi-Tenant Identity Injection & Constraint Interception
+// PURPOSE: Customer Transaction Interface with Autocomplete Dropdown
+// SQA FOCUS: Usability & Prevention of Entity Faults (Input Validation)
 // ==============================================================================
-import React, { useState } from 'react';
-import { TextField, Button, Box, Typography, Snackbar, Alert, CircularProgress } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { 
+    TextField, Button, Box, Typography, Snackbar, 
+    Alert, CircularProgress, Autocomplete 
+} from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
 
-// ARCHITECTURE UPDATE: Inject customerId from the parent component (App.js)
 export default function BookingForm({ customerId, onTransactionSuccess }) {
-    const [eventId, setEventId] = useState('');
+    const [events, setEvents] = useState([]);
+    const [selectedEvent, setSelectedEvent] = useState(null);
     const [tickets, setTickets] = useState('');
     const [loading, setLoading] = useState(false);
+    const [fetching, setFetching] = useState(true);
     const [notification, setNotification] = useState({ open: false, type: 'info', text: '' });
+
+    // READ: Fetch all available events to populate the dropdown
+    useEffect(() => {
+        const fetchEvents = async () => {
+            try {
+                const timestamp = new Date().getTime();
+                const res = await axios.get(`http://localhost:8000/api/events?t=${timestamp}`);
+                setEvents(res.data.data);
+            } catch (err) {
+                console.error("Failed to fetch event list for dropdown.");
+            } finally {
+                setFetching(false);
+            }
+        };
+        fetchEvents();
+    }, [onTransactionSuccess]); // Refresh list when any transaction occurs
 
     const handleCloseNotification = () => setNotification({ ...notification, open: false });
 
     const handleBooking = async (e) => {
         e.preventDefault();
-        setLoading(true);
+        if (!selectedEvent) {
+            setNotification({ open: true, type: 'error', text: 'Please select an event from the list.' });
+            return;
+        }
 
+        setLoading(true);
         try {
-            // TRANSMISSION PROTOCOL: Include customer_id in the DTO payload
             const response = await axios.post('http://localhost:8000/api/bookings', {
-                event_id: eventId,
+                event_id: selectedEvent.event_id,
                 customer_id: customerId, 
                 requested_tickets: parseInt(tickets, 10)
             });
@@ -32,28 +55,16 @@ export default function BookingForm({ customerId, onTransactionSuccess }) {
             setNotification({ 
                 open: true, 
                 type: 'success', 
-                text: `[SUCCESS] Transaction ${response.data.data.booking_id} committed.` 
+                text: `[SUCCESS] ${selectedEvent.title} Booked! ID: ${response.data.data.booking_id.substring(0,8)}` 
             });
             
-            setEventId('');
+            setSelectedEvent(null);
             setTickets('');
-            
             if (onTransactionSuccess) onTransactionSuccess();
             
         } catch (error) {
-            if (error.response && error.response.data) {
-                setNotification({ 
-                    open: true, 
-                    type: 'error', 
-                    text: `[CONSTRAINT FAULT] ${error.response.data.detail}` 
-                });
-            } else {
-                setNotification({ 
-                    open: true, 
-                    type: 'error', 
-                    text: '[SYSTEM FAULT] API Unreachable.' 
-                });
-            }
+            const errorMsg = error.response?.data?.detail || 'API Unreachable.';
+            setNotification({ open: true, type: 'error', text: `[TRANSACTION FAULT] ${errorMsg}` });
         } finally {
             setLoading(false);
         }
@@ -62,17 +73,39 @@ export default function BookingForm({ customerId, onTransactionSuccess }) {
     return (
         <Box component="form" onSubmit={handleBooking} sx={{ p: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', borderRadius: 3, bgcolor: '#ffffff' }}>
             <Typography variant="h5" gutterBottom sx={{ fontWeight: 800, color: '#2c3e50', mb: 3 }}>
-                Transaction Vector
+                Reserve Tickets
             </Typography>
 
-            <TextField
-                fullWidth label="Target Entity (UUID)" variant="outlined" margin="normal"
-                value={eventId} onChange={(e) => setEventId(e.target.value)} required
-                disabled={loading}
+            {/* SQA UPGRADE: Searchable Dropdown replaces manual UUID entry */}
+            <Autocomplete
+                options={events}
+                getOptionLabel={(option) => `${option.title} (${option.available_capacity} left)`}
+                loading={fetching}
+                value={selectedEvent}
+                onChange={(event, newValue) => setSelectedEvent(newValue)}
+                renderInput={(params) => (
+                    <TextField 
+                        {...params} 
+                        label="Select Event" 
+                        variant="outlined" 
+                        margin="normal" 
+                        required 
+                        InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                                <React.Fragment>
+                                    {fetching ? <CircularProgress color="inherit" size={20} /> : null}
+                                    {params.InputProps.endAdornment}
+                                </React.Fragment>
+                            ),
+                        }}
+                    />
+                )}
+                sx={{ mb: 1 }}
             />
             
             <TextField
-                fullWidth label="Ticket Vector (1-10)" type="number" variant="outlined" margin="normal"
+                fullWidth label="Ticket Count (1-10)" type="number" variant="outlined" margin="normal"
                 inputProps={{ min: 1, max: 10 }} 
                 value={tickets} onChange={(e) => setTickets(e.target.value)} required
                 disabled={loading}
@@ -81,13 +114,12 @@ export default function BookingForm({ customerId, onTransactionSuccess }) {
             <Button 
                 type="submit" fullWidth variant="contained" color="primary" 
                 size="large" sx={{ mt: 3, py: 1.5, fontWeight: 'bold' }}
-                disabled={loading}
+                disabled={loading || !selectedEvent}
                 endIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
             >
-                {loading ? 'Processing State...' : 'Commit Transaction'}
+                {loading ? 'Processing...' : 'Confirm Booking'}
             </Button>
 
-            {/* Professional Transient Feedback */}
             <Snackbar open={notification.open} autoHideDuration={6000} onClose={handleCloseNotification} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
                 <Alert onClose={handleCloseNotification} severity={notification.type} sx={{ width: '100%', fontWeight: 'bold' }}>
                     {notification.text}
