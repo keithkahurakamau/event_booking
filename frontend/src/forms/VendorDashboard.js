@@ -1,182 +1,126 @@
-// ==============================================================================
-// FILE: src/forms/VendorDashboard.js
-// PURPOSE: Vendor CRUD Interface & Constraint Handling
-// SQA FOCUS: Update Invariants (Cannot shrink capacity below sold tickets)
-// ==============================================================================
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
     Box, Typography, TextField, Button, Alert, Table, TableBody, 
     TableCell, TableHead, TableRow, Paper, IconButton, 
-    Dialog, DialogTitle, DialogContent, DialogActions 
+    Dialog, DialogTitle, DialogContent, DialogActions, Avatar, InputAdornment 
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import PostAddIcon from '@mui/icons-material/PostAdd';
 import axios from 'axios';
 
-// INTERFACE: Accepts both 'onStateChange' and 'onEventCreated' to ensure 
-// backward compatibility with App.js routing logic.
 export default function VendorDashboard({ vendorId, onStateChange, onEventCreated }) {
     const [events, setEvents] = useState([]);
     const [title, setTitle] = useState('');
     const [capacity, setCapacity] = useState('');
     const [notification, setNotification] = useState({ type: '', text: '' });
-
-    // --- EDIT MODAL STATE ---
     const [editOpen, setEditOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState({ id: '', title: '', capacity: '' });
 
-    // READ: Fetch only this vendor's events
     const fetchMyEvents = useCallback(async () => {
         try {
             const res = await axios.get(`http://localhost:8000/api/vendor/events/${vendorId}`);
             setEvents(res.data.data);
-        } catch (error) {
-            console.error("Failed to fetch vendor data");
-        }
+        } catch (error) { console.error("Fetch error"); }
     }, [vendorId]);
 
     useEffect(() => { fetchMyEvents(); }, [fetchMyEvents]);
 
-    // SYNCHRONIZATION PROTOCOL: Fires all available state-lifting callbacks
     const triggerGlobalRefresh = () => {
         if (typeof onStateChange === 'function') onStateChange();
         if (typeof onEventCreated === 'function') onEventCreated();
     };
 
-    // CREATE: Inject new event associated with vendorId
     const handleCreate = async (e) => {
         e.preventDefault();
         try {
             await axios.post('http://localhost:8000/api/vendor/events', {
                 vendor_id: vendorId, title: title, total_capacity: parseInt(capacity, 10)
             });
-            setNotification({ type: 'success', text: 'Entity Deployed Successfully.' });
+            setNotification({ type: 'success', text: 'Deployment Successful.' });
             setTitle(''); setCapacity('');
-            
-            fetchMyEvents(); // Update local table
-            triggerGlobalRefresh(); // Update global inventory
-            
-        } catch (err) {
-            setNotification({ type: 'error', text: 'Deployment Failed.' });
-        }
+            fetchMyEvents();
+            triggerGlobalRefresh();
+        } catch (err) { setNotification({ type: 'error', text: 'Deployment Failed.' }); }
     };
 
-    // DELETE: Attempt to remove entity
-    const handleDelete = async (eventId) => {
-        try {
-            await axios.delete(`http://localhost:8000/api/vendor/events/${eventId}`);
-            setNotification({ type: 'success', text: 'Entity Purged.' });
-            
-            fetchMyEvents(); // Update local table
-            triggerGlobalRefresh(); // Update global inventory
-            
-        } catch (error) {
-            // SQA FOCUS: Referential Integrity Interception
-            if (error.response && error.response.status === 400) {
-                setNotification({ type: 'error', text: 'Integrity Fault: Cannot delete an event with active customer bookings.' });
-            }
-        }
-    };
-
-    // UPDATE - PART 1: Open the modal and populate with current data
-    const handleOpenEdit = (ev) => {
-        setEditingEvent({ id: ev.event_id, title: ev.title, capacity: ev.total_capacity });
-        setEditOpen(true);
-        setNotification({ type: '', text: '' }); // Clear any background notifications
-    };
-
-    // UPDATE - PART 2: Transmit the mutated vector to the API
     const handleUpdateSubmit = async () => {
         try {
             await axios.put(`http://localhost:8000/api/vendor/events/${editingEvent.id}`, {
-                title: editingEvent.title,
-                total_capacity: parseInt(editingEvent.capacity, 10)
+                title: editingEvent.title, total_capacity: parseInt(editingEvent.capacity, 10)
             });
-            setNotification({ type: 'success', text: 'Entity Updated Successfully.' });
+            setNotification({ type: 'success', text: 'Update Committed.' });
             setEditOpen(false);
-            
-            fetchMyEvents(); // Update local table
-            triggerGlobalRefresh(); // Update global inventory
-            
+            fetchMyEvents();
+            triggerGlobalRefresh();
         } catch (error) {
-            // SQA FOCUS: Intercepting the mathematical capacity constraint
-            if (error.response && error.response.data) {
-                setNotification({ type: 'error', text: `[UPDATE FAULT] ${error.response.data.detail}` });
-            } else {
-                setNotification({ type: 'error', text: 'Update Failed. System unreachable.' });
-            }
-            setEditOpen(false); // Close modal so user sees the error on the main dashboard
+            const msg = error.response?.data?.detail || "Update Rejected.";
+            setNotification({ type: 'error', text: msg });
+            setEditOpen(false);
         }
     };
 
     return (
-        <Box sx={{ p: 3, bgcolor: '#fff', borderRadius: 2, boxShadow: 2 }}>
-            <Typography variant="h6" color="primary" gutterBottom>Vendor Dashboard: {vendorId}</Typography>
-            
-            {notification.text && <Alert severity={notification.type} sx={{ mb: 2 }}>{notification.text}</Alert>}
-
-            {/* Creation Form */}
-            <Box component="form" onSubmit={handleCreate} sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
-                <TextField label="Event Title" value={title} onChange={(e) => setTitle(e.target.value)} required size="small" sx={{ flexGrow: 1 }} />
-                <TextField label="Total Capacity" type="number" inputProps={{ min: 1 }} value={capacity} onChange={(e) => setCapacity(e.target.value)} required size="small" sx={{ width: 120 }} />
-                <Button type="submit" variant="contained" color="success">Deploy</Button>
+        <Paper elevation={0} sx={{ p: 4, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <Avatar sx={{ bgcolor: '#10b981', mr: 2, width: 40, height: 40 }}><PostAddIcon /></Avatar>
+                <Typography variant="h5">Management Console</Typography>
             </Box>
 
-            {/* Data Table */}
-            <Paper variant="outlined">
-                <Table size="small">
-                    <TableHead sx={{ bgcolor: '#f5f5f5' }}>
-                        <TableRow>
-                            <TableCell><strong>My Events</strong></TableCell>
-                            <TableCell align="center"><strong>Avail / Total</strong></TableCell>
-                            <TableCell align="right"><strong>Actions</strong></TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {events.map((ev) => (
-                            <TableRow key={ev.event_id}>
-                                <TableCell>{ev.title}</TableCell>
-                                <TableCell align="center">
-                                    {ev.available_capacity} / {ev.total_capacity}
-                                </TableCell>
-                                <TableCell align="right">
-                                    <IconButton color="primary" onClick={() => handleOpenEdit(ev)} size="small" sx={{ mr: 1 }}>
-                                        <EditIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton color="error" onClick={() => handleDelete(ev.event_id)} size="small">
-                                        <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                        {events.length === 0 && (
-                            <TableRow><TableCell colSpan={3} align="center">No entities deployed.</TableCell></TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </Paper>
+            {notification.text && <Alert severity={notification.type} sx={{ mb: 3, borderRadius: 3 }}>{notification.text}</Alert>}
 
-            {/* SQA-Secured Edit Modal */}
-            <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle sx={{ fontWeight: 'bold', color: '#2c3e50' }}>Modify Event Entity</DialogTitle>
-                <DialogContent dividers>
-                    <TextField
-                        fullWidth label="Event Title" variant="outlined" margin="normal"
-                        value={editingEvent.title}
-                        onChange={(e) => setEditingEvent({ ...editingEvent, title: e.target.value })}
-                    />
-                    <TextField
-                        fullWidth label="Total Capacity" type="number" variant="outlined" margin="normal"
-                        inputProps={{ min: 1 }}
-                        value={editingEvent.capacity}
-                        onChange={(e) => setEditingEvent({ ...editingEvent, capacity: e.target.value })}
-                    />
+            <Box component="form" onSubmit={handleCreate} sx={{ mb: 4, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                <TextField 
+                    fullWidth label="Event Name" size="small" value={title} 
+                    onChange={(e) => setTitle(e.target.value)} required 
+                    sx={{ flexGrow: 1 }}
+                />
+                <TextField 
+                    label="Units" type="number" size="small" value={capacity} 
+                    onChange={(e) => setCapacity(e.target.value)} required 
+                    sx={{ width: 100 }}
+                />
+                <Button variant="contained" color="success" type="submit" sx={{ px: 4, borderRadius: 3 }}>Deploy</Button>
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                Active System Entities
+            </Typography>
+            
+            <Table size="small">
+                <TableBody>
+                    {events.map((ev) => (
+                        <TableRow key={ev.event_id} sx={{ '&:last-child td': { border: 0 } }}>
+                            <TableCell sx={{ fontWeight: 700, py: 2 }}>{ev.title}</TableCell>
+                            <TableCell align="right">
+                                <IconButton size="small" onClick={() => { setEditingEvent({ id: ev.event_id, title: ev.title, capacity: ev.total_capacity }); setEditOpen(true); }}>
+                                    <EditIcon fontSize="inherit" color="primary" />
+                                </IconButton>
+                                <IconButton size="small" onClick={async () => { 
+                                    try { 
+                                        await axios.delete(`http://localhost:8000/api/vendor/events/${ev.event_id}`); 
+                                        fetchMyEvents(); triggerGlobalRefresh(); 
+                                    } catch(e) { setNotification({type: 'error', text: 'Deletion Restricted: Active Bookings Found.'}); }
+                                }}>
+                                    <DeleteIcon fontSize="inherit" color="error" />
+                                </IconButton>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+
+            <Dialog open={editOpen} onClose={() => setEditOpen(false)} PaperProps={{ sx: { borderRadius: 5, p: 2 } }}>
+                <DialogTitle sx={{ fontWeight: 900 }}>Update Vector</DialogTitle>
+                <DialogContent>
+                    <TextField fullWidth label="Title" margin="normal" value={editingEvent.title} onChange={(e) => setEditingEvent({...editingEvent, title: e.target.value})} />
+                    <TextField fullWidth label="Total Capacity" type="number" margin="normal" value={editingEvent.capacity} onChange={(e) => setEditingEvent({...editingEvent, capacity: e.target.value})} />
                 </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setEditOpen(false)} color="inherit" sx={{ fontWeight: 'bold' }}>Cancel</Button>
-                    <Button onClick={handleUpdateSubmit} variant="contained" color="primary" sx={{ fontWeight: 'bold' }}>Commit Update</Button>
+                <DialogActions>
+                    <Button onClick={() => setEditOpen(false)} color="inherit">Cancel</Button>
+                    <Button onClick={handleUpdateSubmit} variant="contained">Commit</Button>
                 </DialogActions>
             </Dialog>
-        </Box>
+        </Paper>
     );
 }
