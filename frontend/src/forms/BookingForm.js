@@ -1,9 +1,15 @@
+// ==============================================================================
+// FILE: src/forms/BookingForm.js
+// PURPOSE: Customer Transaction Interface
+// SQA FOCUS: Multi-Tenant Identity Injection & Constraint Interception
+// ==============================================================================
 import React, { useState } from 'react';
 import { TextField, Button, Box, Typography, Snackbar, Alert, CircularProgress } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
 
-export default function BookingForm({ onTransactionSuccess }) {
+// ARCHITECTURE UPDATE: Inject customerId from the parent component (App.js)
+export default function BookingForm({ customerId, onTransactionSuccess }) {
     const [eventId, setEventId] = useState('');
     const [tickets, setTickets] = useState('');
     const [loading, setLoading] = useState(false);
@@ -16,12 +22,19 @@ export default function BookingForm({ onTransactionSuccess }) {
         setLoading(true);
 
         try {
+            // TRANSMISSION PROTOCOL: Include customer_id in the DTO payload
             const response = await axios.post('http://localhost:8000/api/bookings', {
                 event_id: eventId,
+                customer_id: customerId, 
                 requested_tickets: parseInt(tickets, 10)
             });
             
-            setNotification({ open: true, type: 'success', text: `[SUCCESS] Transaction ${response.data.data.booking_id} committed.` });
+            setNotification({ 
+                open: true, 
+                type: 'success', 
+                text: `[SUCCESS] Transaction ${response.data.data.booking_id} committed.` 
+            });
+            
             setEventId('');
             setTickets('');
             
@@ -29,9 +42,17 @@ export default function BookingForm({ onTransactionSuccess }) {
             
         } catch (error) {
             if (error.response && error.response.data) {
-                setNotification({ open: true, type: 'error', text: `[CONSTRAINT FAULT] ${error.response.data.detail}` });
+                setNotification({ 
+                    open: true, 
+                    type: 'error', 
+                    text: `[CONSTRAINT FAULT] ${error.response.data.detail}` 
+                });
             } else {
-                setNotification({ open: true, type: 'error', text: '[SYSTEM FAULT] API Unreachable.' });
+                setNotification({ 
+                    open: true, 
+                    type: 'error', 
+                    text: '[SYSTEM FAULT] API Unreachable.' 
+                });
             }
         } finally {
             setLoading(false);

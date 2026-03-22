@@ -1,3 +1,8 @@
+// ==============================================================================
+// FILE: src/components/EventInventory.js
+// PURPOSE: Dynamic Data Fetching & Real-Time State Visualization
+// SQA FOCUS: Cache-Busting for Deterministic Data Representation
+// ==============================================================================
 import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, CircularProgress, Box, Chip, IconButton, Tooltip, LinearProgress } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -10,7 +15,9 @@ export default function EventInventory({ refreshTrigger }) {
     useEffect(() => {
         const fetchStateMatrix = async () => {
             try {
-                const response = await axios.get('http://localhost:8000/api/events');
+                // INJECTED CACHE BUSTER: Appending a timestamp forces a fresh network call
+                const timestamp = new Date().getTime();
+                const response = await axios.get(`http://localhost:8000/api/events?t=${timestamp}`);
                 setEvents(response.data.data);
             } catch (err) {
                 console.error("State synchronization failed.");

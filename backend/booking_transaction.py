@@ -2,12 +2,13 @@
 # FILE: booking_transaction.py
 # PURPOSE: Transactional State Mutation (System Under Test)
 # SQA FOCUS: Control Flow Graph (CFG) Logic, Cyclomatic Complexity V(G) = 5
+# ARCHITECTURE: Multi-Tenant Identity Association (customer_id)
 # ==============================================================================
 import uuid
 import psycopg2
 from psycopg2.errors import CheckViolation, IntegrityError
 
-def execute_booking(event_id: str, requested_tickets: int, conn) -> dict:
+def execute_booking(event_id: str, customer_id: str, requested_tickets: int, conn) -> dict:
     """
     Executes a deterministic state transition to book tickets.
     Employs row-level locking to prevent concurrency anomalies.
@@ -37,12 +38,12 @@ def execute_booking(event_id: str, requested_tickets: int, conn) -> dict:
                 (requested_tickets, event_id)
             )
 
-            # Record instantiation
+            # Record instantiation with Multi-Tenant Customer Association
             booking_id = str(uuid.uuid4())
             cursor.execute(
-                """INSERT INTO bookings (booking_id, event_id, tickets_requested, status) 
-                   VALUES (%s, %s, %s, %s)""",
-                (booking_id, event_id, requested_tickets, 'CONFIRMED')
+                """INSERT INTO bookings (booking_id, event_id, customer_id, tickets_requested, status) 
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (booking_id, event_id, customer_id, requested_tickets, 'CONFIRMED')
             )
             
             # Absolute Commit
