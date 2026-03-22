@@ -1,61 +1,77 @@
 import React, { useState } from 'react';
-import { TextField, Button, Box, Typography, Alert } from '@mui/material';
+import { TextField, Button, Box, Typography, Snackbar, Alert, CircularProgress } from '@mui/material';
+import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
 
-export default function BookingForm() {
+export default function BookingForm({ onTransactionSuccess }) {
     const [eventId, setEventId] = useState('');
     const [tickets, setTickets] = useState('');
-    const [message, setMessage] = useState({ type: '', text: '' });
+    const [loading, setLoading] = useState(false);
+    const [notification, setNotification] = useState({ open: false, type: 'info', text: '' });
+
+    const handleCloseNotification = () => setNotification({ ...notification, open: false });
 
     const handleBooking = async (e) => {
         e.preventDefault();
-        setMessage({ type: '', text: '' }); // Clear previous state
+        setLoading(true);
 
         try {
-            // Transmit vector to the Python API
             const response = await axios.post('http://localhost:8000/api/bookings', {
                 event_id: eventId,
                 requested_tickets: parseInt(tickets, 10)
             });
             
-            // Handle CFG Path 1 (Nominal Execution)
-            setMessage({ 
-                type: 'success', 
-                text: `Booking Confirmed! ID: ${response.data.data.booking_id}` 
-            });
+            setNotification({ open: true, type: 'success', text: `[SUCCESS] Transaction ${response.data.data.booking_id} committed.` });
+            setEventId('');
+            setTickets('');
+            
+            if (onTransactionSuccess) onTransactionSuccess();
             
         } catch (error) {
-            // Handle Constraint Interceptions (CFG Paths 2, 3, 4)
             if (error.response && error.response.data) {
-                setMessage({ type: 'error', text: error.response.data.detail });
+                setNotification({ open: true, type: 'error', text: `[CONSTRAINT FAULT] ${error.response.data.detail}` });
             } else {
-                setMessage({ type: 'error', text: 'Network Error. API Unreachable.' });
+                setNotification({ open: true, type: 'error', text: '[SYSTEM FAULT] API Unreachable.' });
             }
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <Box component="form" onSubmit={handleBooking} sx={{ maxWidth: 400, margin: 'auto', mt: 5 }}>
-            <Typography variant="h5" gutterBottom>Event Booking Portal</Typography>
-            
-            {message.text && (
-                <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>
-            )}
+        <Box component="form" onSubmit={handleBooking} sx={{ p: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', borderRadius: 3, bgcolor: '#ffffff' }}>
+            <Typography variant="h5" gutterBottom sx={{ fontWeight: 800, color: '#2c3e50', mb: 3 }}>
+                Transaction Vector
+            </Typography>
 
             <TextField
-                fullWidth label="Event ID (UUID)" variant="outlined" margin="normal"
+                fullWidth label="Target Entity (UUID)" variant="outlined" margin="normal"
                 value={eventId} onChange={(e) => setEventId(e.target.value)} required
+                disabled={loading}
             />
             
             <TextField
-                fullWidth label="Requested Tickets (1-10)" type="number" variant="outlined" margin="normal"
-                inputProps={{ min: 1, max: 10 }} // Client-side constraint enforcement
+                fullWidth label="Ticket Vector (1-10)" type="number" variant="outlined" margin="normal"
+                inputProps={{ min: 1, max: 10 }} 
                 value={tickets} onChange={(e) => setTickets(e.target.value)} required
+                disabled={loading}
             />
             
-            <Button type="submit" fullWidth variant="contained" color="primary" sx={{ mt: 2 }}>
-                Authorize Transaction
+            <Button 
+                type="submit" fullWidth variant="contained" color="primary" 
+                size="large" sx={{ mt: 3, py: 1.5, fontWeight: 'bold' }}
+                disabled={loading}
+                endIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+            >
+                {loading ? 'Processing State...' : 'Commit Transaction'}
             </Button>
+
+            {/* Professional Transient Feedback */}
+            <Snackbar open={notification.open} autoHideDuration={6000} onClose={handleCloseNotification} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+                <Alert onClose={handleCloseNotification} severity={notification.type} sx={{ width: '100%', fontWeight: 'bold' }}>
+                    {notification.text}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 }
