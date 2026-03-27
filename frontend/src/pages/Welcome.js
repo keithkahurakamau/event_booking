@@ -26,7 +26,7 @@ const handleAuth = async (role) => {
         const endpoint = tab === 0 ? '/api/login' : '/api/signup';
         const payload = tab === 0
             ? new URLSearchParams({ username: form.username, password: form.password })
-            : JSON.stringify({ username: form.username, password: form.password, email: form.email });
+           : JSON.stringify({ username: form.username, password: form.password, email: form.email, role })
         const headers = tab === 0
             ? { 'Content-Type': 'application/x-www-form-urlencoded' }
             : { 'Content-Type': 'application/json' };
@@ -46,32 +46,22 @@ const handleAuth = async (role) => {
         if (!res.ok) throw new Error(data.detail || 'Authentication failed');
         let token, userId;
         if (tab === 0) {
-            token = data.access_token;
-            const userRes = await fetch('/api/users/me', {
-    headers: { Authorization: `Bearer ${token}` }
-});
-const userContentType = userRes.headers.get('content-type');
-if (userContentType && userContentType.includes('application/json')) {
-    const userData = await userRes.json();
-    userId = userData.user_id;
-} else {
-    const text = await userRes.text();
-    throw new Error(text || 'Failed to fetch user info');
-}
+    userId = data.user_id;
+    token = data.access_token; // if you want to store it for future use
         } else {
-            userId = data.user_id;
-            const loginRes = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ username: form.username, password: form.password })
-            });
-            const loginData = await loginRes.json();
-            token = loginData.access_token;
-        }
+        userId = data.user_id;
+         const loginRes = await fetch('/api/login', {
+         method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ username: form.username, password: form.password })
+    });
+    const loginData = await loginRes.json();
+    token = loginData.access_token;
+}
         localStorage.setItem('token', token);
         onSelectRole(role, userId);
     } catch (err) {
-        setError(err.message);
+        setError(err?.message || err?.detail || JSON.stringify(err));
     } finally {
         setLoading(false);
     }

@@ -9,34 +9,24 @@ import psycopg2
 from psycopg2.errors import CheckViolation, IntegrityError
 
 def execute_booking(event_id: str, customer_id: str, requested_tickets: int, conn) -> dict:
-    """
-    Executes a deterministic state transition to book tickets.
-    Employs row-level locking to prevent concurrency anomalies.
-    """
+
     try:
         with conn.cursor() as cursor:
+            # Validate customer_id is a valid UUID and exists in users table
+            try:
+                uuid.UUID(customer_id)
+            except Exception:
+                raise ValueError("Invalid customer_id: not a valid UUID.")
+            cursor.execute("SELECT user_id FROM users WHERE user_id = %s", (customer_id,))
+            if not cursor.fetchone():
+                raise ValueError("Target entity [customer_id] does not exist.")
+
             # 1. Acquire exclusive lock (FOR UPDATE) to maintain state consistency
             cursor.execute(
                 "SELECT available_capacity FROM events WHERE event_id = %s FOR UPDATE",
                 (event_id,)
             )
-            result = cursor.fetchone()
-            
-            # PREDICATE NODE 1: Entity validation
-            if not result:
-                raise ValueError("Target entity [event_id] does not exist.")
-                
-            current_capacity = result[0]
-            
-            # PREDICATE NODE 2: Dynamic inventory constraint mapping
-            if requested_tickets > current_capacity:
-                raise ValueError(f"Constraint violation: Requested vector {requested_tickets} exceeds limit {current_capacity}.")
 
-            # State Transition: C_new = C_current - x
-            cursor.execute(
-                "UPDATE events SET available_capacity = available_capacity - %s WHERE event_id = %s",
-                (requested_tickets, event_id)
-            )
 
             # Record instantiation with Multi-Tenant Customer Association
             booking_id = str(uuid.uuid4())

@@ -6,51 +6,49 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Ensure a clean initialization state by dropping existing relations
 DROP TABLE IF EXISTS bookings CASCADE;
 DROP TABLE IF EXISTS events CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
--- 1. ENTITY: EVENTS (Vendor Domain)
+-- 1. ENTITY: USERS (Authentication Domain)
+CREATE TABLE users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('vendor', 'customer'))
+);
+
+-- 2. ENTITY: EVENTS (Vendor Domain)
 CREATE TABLE events (
     event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    
-    -- IDENTITY ASSOCIATION: Links the entity to a specific vendor
-    vendor_id VARCHAR(100) NOT NULL, 
-    
+    vendor_id UUID REFERENCES users(user_id) ON DELETE RESTRICT,
     title VARCHAR(255) NOT NULL,
-    
-    -- SYSTEM INVARIANT 1: Total capacity must be a positive, non-zero integer.
     total_capacity INTEGER NOT NULL CHECK (total_capacity > 0),
-    
-    -- SYSTEM INVARIANT 2 (CORRECTNESS FACTOR): 
-    -- The available capacity (C) must mathematically never drop below zero.
-    -- This database-level CHECK constraint physically prevents venue overbooking,
-    -- bypassing application-layer race conditions.
     available_capacity INTEGER NOT NULL CHECK (available_capacity >= 0)
 );
 
--- 2. ENTITY: BOOKINGS (Customer Domain)
+-- 3. ENTITY: BOOKINGS (Customer Domain)
 CREATE TABLE bookings (
     booking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    
-    -- REFERENTIAL INTEGRITY: 'RESTRICT' prevents the deletion of an event 
-    -- if child records (bookings) exist in this table.
     event_id UUID REFERENCES events(event_id) ON DELETE RESTRICT,
-    
-    -- IDENTITY ASSOCIATION: Links the transaction to a specific customer
-    customer_id VARCHAR(100) NOT NULL,
-    
-    -- EQUIVALENCE PARTITION ENFORCEMENT:
-    -- Valid Partition: 1 <= x <= 10.
-    -- This constraint guarantees that vectors like x=0 or x=11 are rejected
-    -- at the database level, throwing an IntegrityError to the Python backend.
+    customer_id UUID REFERENCES users(user_id) ON DELETE RESTRICT,
     tickets_requested INTEGER NOT NULL CHECK (tickets_requested BETWEEN 1 AND 10),
-    
     status VARCHAR(50) NOT NULL,
-    
-    -- TEMPORAL TRACKING: Required for sorting customer transaction history
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('vendor', 'customer'))
+);
+
+
+-- Update events and bookings to reference users if needed
+-- (events.vendor_id should match users.user_id, bookings.customer_id should match users.user_id)
 
 -- -- Seed Initial State Vector for testing boundaries (Update with vendor_id)
 -- INSERT INTO events (vendor_id, title, total_capacity, available_capacity)

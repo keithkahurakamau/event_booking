@@ -35,40 +35,46 @@ export default function BookingForm({ customerId, onTransactionSuccess }) {
         fetchEvents();
     }, [onTransactionSuccess]); // Refresh list when any transaction occurs
 
-    const handleCloseNotification = () => setNotification({ ...notification, open: false });
+const handleCloseNotification = () => setNotification({ ...notification, open: false });
 
-    const handleBooking = async (e) => {
-        e.preventDefault();
-        if (!selectedEvent) {
-            setNotification({ open: true, type: 'error', text: 'Please select an event from the list.' });
-            return;
+// Handles booking submission
+const handleBooking = async (e) => {
+    e.preventDefault();
+    if (!selectedEvent) {
+        setNotification({ open: true, type: 'error', text: 'Please select an event from the list.' });
+        return;
+    }
+    // Validate customerId is a non-empty valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!customerId || !uuidRegex.test(customerId)) {
+        setNotification({ open: true, type: 'error', text: 'Invalid or missing customer ID. Please log in again.' });
+        return;
+    }
+    setLoading(true);
+    try {
+        const response = await axios.post('http://localhost:8000/api/bookings', {
+            event_id: selectedEvent.event_id,
+            customer_id: customerId,
+            requested_tickets: parseInt(tickets, 10)
+        });
+        setNotification({ 
+            open: true, 
+            type: 'success', 
+            text: `[SUCCESS] ${selectedEvent.title} Booked! ID: ${response.data.data.booking_id.substring(0,8)}` 
+        });
+        setSelectedEvent(null);
+        setTickets('');
+        if (onTransactionSuccess) onTransactionSuccess();
+    } catch (error) {
+        let errorMsg = error.response?.data?.detail || 'API Unreachable.';
+        if (typeof errorMsg === 'object') {
+            errorMsg = JSON.stringify(errorMsg);
         }
-
-        setLoading(true);
-        try {
-            const response = await axios.post('http://localhost:8000/api/bookings', {
-                event_id: selectedEvent.event_id,
-                customer_id: customerId, 
-                requested_tickets: parseInt(tickets, 10)
-            });
-            
-            setNotification({ 
-                open: true, 
-                type: 'success', 
-                text: `[SUCCESS] ${selectedEvent.title} Booked! ID: ${response.data.data.booking_id.substring(0,8)}` 
-            });
-            
-            setSelectedEvent(null);
-            setTickets('');
-            if (onTransactionSuccess) onTransactionSuccess();
-            
-        } catch (error) {
-            const errorMsg = error.response?.data?.detail || 'API Unreachable.';
-            setNotification({ open: true, type: 'error', text: `[TRANSACTION FAULT] ${errorMsg}` });
-        } finally {
-            setLoading(false);
-        }
-    };
+        setNotification({ open: true, type: 'error', text: `[TRANSACTION FAULT] ${errorMsg}` });
+    } finally {
+        setLoading(false);
+    }
+};
 
     return (
         <Box component="form" onSubmit={handleBooking} sx={{ p: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', borderRadius: 3, bgcolor: '#ffffff' }}>

@@ -3,7 +3,10 @@
 # PURPOSE: Multi-Tenant RESTful API Routing Layer (CRUD Implementation)
 # SQA FOCUS: Referential Integrity, Constraint Enforcement & State Visibility
 # ==============================================================================
+
+import bcrypt
 from fastapi import FastAPI, HTTPException
+from fastapi import Form
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
@@ -25,6 +28,17 @@ app.add_middleware(
 )
 
 # --- DATA TRANSFER OBJECTS (DTOs) ---
+
+class UserCreateRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    role: str  # 'vendor' or 'customer'
+
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+
 class BookingRequest(BaseModel):
     event_id: str
     customer_id: str
@@ -65,6 +79,101 @@ def get_all_events():
 # ==============================================================================
 # CUSTOMER DOMAIN
 # ==============================================================================
+
+@app.post("/api/signup", status_code=201)
+def signup(payload: UserCreateRequest):
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            password_hash = bcrypt.hashpw(payload.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user_id = str(uuid.uuid4())
+            cursor.execute(
+                "INSERT INTO users (user_id, username, email, password_hash, role) VALUES (%s, %s, %s, %s, %s) RETURNING user_id",
+                (user_id, payload.username, payload.email, password_hash, payload.role)
+            )
+            conn.commit()
+        return {"status": "success", "user_id": user_id}
+    except psycopg2.errors.UniqueViolation:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=400, detail="Username or email already exists.")
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+from fastapi import Form
+
+@app.post("/api/login")
+def login(
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    ...
+    # Replace payload.username with username, payload.password with password
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT user_id, password_hash, role FROM users WHERE username = %s", (username,))
+            user = cursor.fetchone()
+            if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+                raise HTTPException(status_code=401, detail="Invalid username or password.")
+        return {"status": "success", "user_id": user['user_id'], "role": user['role']}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/users", status_code=200)
+def list_users():
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT user_id, username, email, role FROM users ORDER BY username")
+            users = cursor.fetchall()
+        return {"status": "success", "data": users}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/users/{user_id}", status_code=200)
+def get_user(user_id: str):
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT user_id, username, email, role FROM users WHERE user_id = %s", (user_id,))
+            user = cursor.fetchone()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found.")
+        return {"status": "success", "data": user}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/bookings", status_code=200)
+def list_bookings():
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM bookings ORDER BY created_at DESC")
+            bookings = cursor.fetchall()
+        return {"status": "success", "data": bookings}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+        
+ 
 @app.post("/api/bookings", status_code=201)
 def create_booking(payload: BookingRequest):
     """Executes a transaction, associating it with a customer_id."""
