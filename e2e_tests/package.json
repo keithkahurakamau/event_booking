@@ -1,0 +1,17 @@
+{
+  "name": "e2e_tests",
+  "version": "1.0.0",
+  "description": "SQA Black Box API Verification",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha 'tests/**/*.test.js' --timeout 10000 --exit"
+  },
+  "keywords": [],
+  "author": "Keith Kamau",
+  "license": "ISC",
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "supertest": "^6.3.3"
+  }
+}

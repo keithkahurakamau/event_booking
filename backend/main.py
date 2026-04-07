@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import uuid
 
 # Import mathematically verified logic
 from booking_transaction import execute_booking
@@ -109,8 +110,6 @@ def login(
     username: str = Form(...),
     password: str = Form(...)
 ):
-    ...
-    # Replace payload.username with username, payload.password with password
     conn = None
     try:
         conn = get_connection()

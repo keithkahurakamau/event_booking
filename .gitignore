@@ -1,0 +1,64 @@
+# ==============================================================================
+# FILE: .gitignore
+# PURPOSE: Version Control Isolation Matrix
+# ==============================================================================
+
+# 1. Node.js & React (Frontend & e2e_tests)
+# ------------------------------------------------------------------------------
+node_modules/
+build/
+dist/
+coverage/
+.npm/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 2. Python & FastAPI (Backend)
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 3. Environment Variables & State Secrets
+# ------------------------------------------------------------------------------
+# Strictly prevents credentials and database connection strings from being pushed
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+secrets.json
+
+# 4. Operating System Artifacts
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 5. IDE, Editor & Temporary Files
+# ------------------------------------------------------------------------------
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+# Explicitly ignores local VS Code states while allowing shared settings
+.vscode/*
+!.vscode/settings.json
