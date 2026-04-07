@@ -2,6 +2,7 @@
 **Software Quality Assurance (SQA) Architecture Prototype**
 
 **Developer & Presenter:** Keith Kamau, Amanda Kirongothi 
+
 **Course:** SWE 3020 (Software Testing & Quality Assurance)  
 **Objective:** Mathematical verification of transactional state machines and demonstration of absolute structural coverage.
 
