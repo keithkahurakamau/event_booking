@@ -11,6 +11,7 @@ import {
 import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
 
+
 export default function BookingForm({ customerId, onTransactionSuccess }) {
     const [events, setEvents] = useState([]);
     const [selectedEvent, setSelectedEvent] = useState(null);
@@ -18,6 +19,8 @@ export default function BookingForm({ customerId, onTransactionSuccess }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const [notification, setNotification] = useState({ open: false, type: 'info', text: '' });
+    const pricePerTicket = selectedEvent?.price || 1000;
+    const total = tickets ? tickets * pricePerTicket : 0;
 
     // READ: Fetch all available events to populate the dropdown
     useEffect(() => {
@@ -40,41 +43,48 @@ const handleCloseNotification = () => setNotification({ ...notification, open: f
 // Handles booking submission
 const handleBooking = async (e) => {
     e.preventDefault();
+
     if (!selectedEvent) {
-        setNotification({ open: true, type: 'error', text: 'Please select an event from the list.' });
+        setNotification({ open: true, type: 'error', text: 'Please select an event.' });
         return;
     }
-    // Validate customerId is a non-empty valid UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!customerId || !uuidRegex.test(customerId)) {
-        setNotification({ open: true, type: 'error', text: 'Invalid or missing customer ID. Please log in again.' });
-        return;
-    }
+
     setLoading(true);
-    try {
-        const response = await axios.post('http://localhost:8000/api/bookings', {
-            event_id: selectedEvent.event_id,
-            customer_id: customerId,
-            requested_tickets: parseInt(tickets, 10)
-        });
-        setNotification({ 
-            open: true, 
-            type: 'success', 
-            text: `[SUCCESS] ${selectedEvent.title} Booked! ID: ${response.data.data.booking_id.substring(0,8)}` 
-        });
-        setSelectedEvent(null);
-        setTickets('');
-        if (onTransactionSuccess) onTransactionSuccess();
-    } catch (error) {
-        let errorMsg = error.response?.data?.detail || 'API Unreachable.';
-        if (typeof errorMsg === 'object') {
-            errorMsg = JSON.stringify(errorMsg);
+
+    // 💳 FAKE PAYMENT STEP
+    setNotification({ open: true, type: 'info', text: 'Processing payment...' });
+
+    setTimeout(async () => {
+        try {
+            const response = await axios.post('http://localhost:8000/api/bookings', {
+                event_id: selectedEvent.event_id,
+                customer_id: customerId,
+                requested_tickets: parseInt(tickets, 10)
+            });
+
+            setNotification({
+                open: true,
+                type: 'success',
+                text: `Payment successful! Booking ID: ${response.data.data.booking_id.substring(0,8)}`
+            });
+            
+            onTransactionSuccess?.();
+
+            setSelectedEvent(null);
+            setTickets('');
+
+        } catch (error) {
+            setNotification({
+                open: true,
+                type: 'error',
+                text: 'Payment failed. Try again.'
+            });
+        } finally {
+            setLoading(false);
         }
-        setNotification({ open: true, type: 'error', text: `[TRANSACTION FAULT] ${errorMsg}` });
-    } finally {
-        setLoading(false);
-    }
+    }, 2000); // ⏳ fake delay (2 seconds)
 };
+    
 
     return (
         <Box component="form" onSubmit={handleBooking} sx={{ p: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', borderRadius: 3, bgcolor: '#ffffff' }}>
@@ -111,20 +121,50 @@ const handleBooking = async (e) => {
             />
             
             <TextField
-                fullWidth label="Ticket Count (1-10)" type="number" variant="outlined" margin="normal"
-                inputProps={{ min: 1, max: 10 }} 
-                value={tickets} onChange={(e) => setTickets(e.target.value)} required
-                disabled={loading}
-            />
-            
-            <Button 
-                type="submit" fullWidth variant="contained" color="primary" 
-                size="large" sx={{ mt: 3, py: 1.5, fontWeight: 'bold' }}
-                disabled={loading || !selectedEvent}
-                endIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
-            >
-                {loading ? 'Processing...' : 'Confirm Booking'}
-            </Button>
+    fullWidth
+    label="Ticket Count (1-10)"
+    type="number"
+    variant="outlined"
+    margin="normal"
+    inputProps={{ min: 1, max: 10 }} 
+    value={tickets}
+    onChange={(e) => setTickets(e.target.value)}
+    required
+    disabled={loading}
+/>
+
+<Typography sx={{ mt: 2 }}>
+    Total: KES {total}
+</Typography>
+
+<TextField
+    fullWidth
+    label="Phone Number"
+    variant="outlined"
+    margin="normal"
+    disabled={loading}
+/>
+
+<TextField
+    fullWidth
+    label="Card Number"
+    variant="outlined"
+    margin="normal"
+    disabled={loading}
+/>
+
+<Button 
+    type="submit"
+    fullWidth
+    variant="contained"
+    color="primary" 
+    size="large"
+    sx={{ mt: 3, py: 1.5, fontWeight: 'bold' }}
+    disabled={loading || !selectedEvent}
+    endIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+>
+    {loading ? 'Processing...' : 'Pay Now'}
+</Button>
 
             <Snackbar open={notification.open} autoHideDuration={6000} onClose={handleCloseNotification} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
                 <Alert onClose={handleCloseNotification} severity={notification.type} sx={{ width: '100%', fontWeight: 'bold' }}>
